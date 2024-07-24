@@ -26,6 +26,10 @@ class TodoController extends Controller
         $userId = Auth()->id();
         $todos = DB::table('todos')->where('user_id', $userId)->get();
 
+        if ($todos->isEmpty()) {
+            return $this->errorResponse('No todos found');
+        }
+
         return $this->successResponse($todos, 'Todos retrieved successfully');
     }
 
