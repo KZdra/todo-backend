@@ -69,7 +69,7 @@ class AuthController extends Controller
      */
     public function me()
     {
-        return response()->json(auth()->id());
+        return response()->json(auth()->user());
     }
 
     /**
