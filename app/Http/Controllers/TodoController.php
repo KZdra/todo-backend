@@ -47,7 +47,6 @@ class TodoController extends Controller
             'activity' => $request->activity,
             'done' => false,
             'created_at' => now(),
-            'updated_at' => now(),
         ]);
 
         $newTodo = DB::table('todos')->where('id', $todo)->first();
