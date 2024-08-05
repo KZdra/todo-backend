@@ -6,16 +6,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
+use Exception;
 
 class TodoController extends Controller
 {
     use ApiResponse;
 
-
     public function __construct()
     {
         $this->middleware('auth:api', ['except' => ['login','register']]);
     }
+
     /**
      * Display a listing of the todos for the authenticated user.
      *
@@ -23,10 +24,14 @@ class TodoController extends Controller
      */
     public function getTodos()
     {
-        $userId = Auth()->id();
-        $todos = DB::table('todos')->where('user_id', $userId)->get();
+        try {
+            $userId = Auth::id();
+            $todos = DB::table('todos')->where('user_id', $userId)->get();
 
-        return $this->successResponse($todos, 'Todos retrieved successfully');
+            return $this->successResponse($todos, 'Todos retrieved successfully');
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to retrieve todos');
+        }
     }
 
     /**
@@ -41,17 +46,27 @@ class TodoController extends Controller
             'activity' => 'required|string|max:255',
         ]);
 
-        $userId = Auth()->id();
-        $todo = DB::table('todos')->insertGetId([
-            'user_id' => $userId,
-            'activity' => $request->activity,
-            'done' => false,
-            'created_at' => now(),
-        ]);
+        $userId = Auth::id();
 
-        $newTodo = DB::table('todos')->where('id', $todo)->first();
+        DB::beginTransaction();
 
-        return $this->todoAddedResponse($newTodo);
+        try {
+            $todoId = DB::table('todos')->insertGetId([
+                'user_id' => $userId,
+                'activity' => $request->activity,
+                'done' => false,
+                'created_at' => now(),
+            ]);
+
+            $newTodo = DB::table('todos')->where('id', $todoId)->first();
+
+            DB::commit();
+
+            return $this->todoAddedResponse($newTodo);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse('Failed to create todo');
+        }
     }
 
     /**
@@ -67,19 +82,29 @@ class TodoController extends Controller
             'done' => 'required|boolean',
         ]);
 
-        $userId = Auth()->id();
-        $todo = DB::table('todos')
-            ->where('id', $id)
-            ->where('user_id', $userId)
-            ->update([
-                'done' => $request->done,
-                'updated_at' => now(),
-            ]);
+        $userId = Auth::id();
 
-        if ($todo) {
-            return $this->successResponse(null, 'Todo updated successfully');
-        } else {
-            return $this->errorResponse('Failed to update todo or todo not found');
+        DB::beginTransaction();
+
+        try {
+            $updated = DB::table('todos')
+                ->where('id', $id)
+                ->where('user_id', $userId)
+                ->update([
+                    'done' => $request->done,
+                    'updated_at' => now(),
+                ]);
+
+            DB::commit();
+
+            if ($updated) {
+                return $this->successResponse(null, 'Todo updated successfully');
+            } else {
+                return $this->errorResponse('Failed to update todo or todo not found');
+            }
+        } catch (Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse('Failed to update todo');
         }
     }
 
@@ -91,16 +116,26 @@ class TodoController extends Controller
      */
     public function destroy($id)
     {
-        $userId = Auth()->id();
-        $todo = DB::table('todos')
-            ->where('id', $id)
-            ->where('user_id', $userId)
-            ->delete();
+        $userId = Auth::id();
 
-        if ($todo) {
-            return $this->successResponse(null, 'Todo deleted successfully');
-        } else {
-            return $this->errorResponse('Failed to delete todo or todo not found');
+        DB::beginTransaction();
+
+        try {
+            $deleted = DB::table('todos')
+                ->where('id', $id)
+                ->where('user_id', $userId)
+                ->delete();
+
+            DB::commit();
+
+            if ($deleted) {
+                return $this->successResponse(null, 'Todo deleted successfully');
+            } else {
+                return $this->errorResponse('Failed to delete todo or todo not found');
+            }
+        } catch (Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse('Failed to delete todo');
         }
     }
 }
